@@ -23,8 +23,8 @@ clean:
 test:
 	$(TEST) ./...
 
-benchmark:
-	zlint-le-benchmark ./rsa2048.ee.pem
+benchmark: zlint-le-benchmark
+	./zlint-le-benchmark ./rsa2048.ee.pem
 
 format-check:
 	diff <(find . -name '*.go' -not -path './vendor/*' -print | xargs -n1 gofmt -l) <(printf "")
