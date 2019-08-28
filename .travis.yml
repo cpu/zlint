@@ -15,10 +15,7 @@ script:
   # Run unit tests
   - make test
   # Dumb benchmarking
-  - go install ./...
-  - go run cmd/zlint-le-benchmark/main.go ./rsa2048.ee.pem
-  - go run cmd/zlint-le-benchmark/main.go ./rsa2048.ee.pem
-  - go run cmd/zlint-le-benchmark/main.go ./rsa2048.ee.pem
+  - make benchmark
 
 notifications:
   email:
