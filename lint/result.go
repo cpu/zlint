@@ -87,6 +87,14 @@ func (e *LintStatus) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// FromString sets the LintStatus value based on the status string provided
+// (case sensitive). If the status string does not match any of the known
+// LintStatus' then s is set to StatusReserved.
+func (s *LintStatus) FromString(status string) {
+	// Trim space and try to match a known value
+	*s = statusLabelToLintStatus[strings.TrimSpace(status)]
+}
+
 // String returns the canonical representation of a LintStatus as a string.
 func (e LintStatus) String() string {
 	switch e {

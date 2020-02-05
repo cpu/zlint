@@ -43,6 +43,7 @@ var ( // flags
 	excludeNames    string
 	includeSources  string
 	excludeSources  string
+	minStatusLabel  string
 
 	// version is replaced by GoReleaser using an LDFlags option at release time.
 	version = "dev"
@@ -58,6 +59,7 @@ func init() {
 	flag.StringVar(&excludeNames, "excludeNames", "", "Comma-separated list of lints to exclude by name")
 	flag.StringVar(&includeSources, "includeSources", "", "Comma-separated list of lint sources to include")
 	flag.StringVar(&excludeSources, "excludeSources", "", "Comma-separated list of lint sources to exclude")
+	flag.StringVar(&minStatusLabel, "minStatus", "", `Only output lint results > provided status level (e.g. "warn", "error")`)
 
 	flag.BoolVar(&prettyprint, "pretty", false, "Pretty-print output")
 	flag.Usage = func() {
@@ -70,20 +72,20 @@ func init() {
 }
 
 func main() {
-	// Build a registry of lints using the include/exclude lint name and source
-	// flags.
-	registry, err := setLints()
+	// Build a linter of lints to run using the include/exclude lint name and
+	// source flags.
+	linter, err := setLints()
 	if err != nil {
 		log.Fatalf("unable to configure included/exclude lints: %v\n", err)
 	}
 
 	if listLintsJSON {
-		registry.WriteJSON(os.Stdout)
+		linter.WriteJSON(os.Stdout)
 		return
 	}
 
 	if listLintsSchema {
-		names := registry.Names()
+		names := linter.Names()
 		fmt.Printf("Lints = SubRecord({\n")
 		for _, lintName := range names {
 			fmt.Printf("    %q:LintBool(),\n", lintName)
@@ -93,7 +95,7 @@ func main() {
 	}
 
 	if listLintSources {
-		sources := registry.Sources()
+		sources := linter.Sources()
 		sort.Sort(sources)
 		for _, source := range sources {
 			fmt.Printf("    %s\n", source)
@@ -101,9 +103,15 @@ func main() {
 		return
 	}
 
+	var minStatus *lint.LintStatus
+	if minStatusLabel != "" {
+		minStatus = new(lint.LintStatus)
+		minStatus.FromString(minStatusLabel)
+	}
+
 	var inform = strings.ToLower(format)
 	if flag.NArg() < 1 || flag.Arg(0) == "-" {
-		doLint(os.Stdin, inform, registry)
+		doLint(os.Stdin, inform, linter, minStatus)
 	} else {
 		for _, filePath := range flag.Args() {
 			var inputFile *os.File
@@ -120,13 +128,13 @@ func main() {
 				fileInform = "pem"
 			}
 
-			doLint(inputFile, fileInform, registry)
+			doLint(inputFile, fileInform, linter, minStatus)
 			inputFile.Close()
 		}
 	}
 }
 
-func doLint(inputFile *os.File, inform string, linter lint.Linter) {
+func doLint(inputFile *os.File, inform string, linter lint.Linter, minStatus *lint.LintStatus) {
 	fileBytes, err := ioutil.ReadAll(inputFile)
 	if err != nil {
 		log.Fatalf("unable to read file %s: %s", inputFile.Name(), err)
@@ -161,6 +169,13 @@ func doLint(inputFile *os.File, inform string, linter lint.Linter) {
 	if err != nil {
 		log.Fatalf("unable to encode lints JSON: %s", err)
 	}
+
+	// If requested, filter the results to just those above a specific status
+	// level.
+	if minStatus != nil {
+		zlintResult.Results = zlintResult.Above(*minStatus)
+	}
+
 	if prettyprint {
 		var out bytes.Buffer
 		if err := json.Indent(&out, jsonBytes, "", " "); err != nil {

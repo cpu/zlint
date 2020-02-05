@@ -65,3 +65,15 @@ func (rs *ResultSet) AddResult(lintName string, result *LintResult) {
 		}
 	}
 }
+
+// Above returns a copy of the ResultSet Results that only includes lint results
+// with a Status higher than the provided LintStatus.
+func (rs *ResultSet) Above(status LintStatus) map[string]*LintResult {
+	filteredResults := make(map[string]*LintResult, len(rs.Results))
+	for name, res := range rs.Results {
+		if res.Status > status {
+			filteredResults[name] = res
+		}
+	}
+	return filteredResults
+}
