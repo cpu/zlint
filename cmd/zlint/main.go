@@ -29,7 +29,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/zmap/zcrypto/x509"
-	"github.com/zmap/zlint"
 	"github.com/zmap/zlint/lint"
 )
 
@@ -127,7 +126,7 @@ func main() {
 	}
 }
 
-func doLint(inputFile *os.File, inform string, registry lint.Registry) {
+func doLint(inputFile *os.File, inform string, linter lint.Linter) {
 	fileBytes, err := ioutil.ReadAll(inputFile)
 	if err != nil {
 		log.Fatalf("unable to read file %s: %s", inputFile.Name(), err)
@@ -157,7 +156,7 @@ func doLint(inputFile *os.File, inform string, registry lint.Registry) {
 		log.Fatalf("unable to parse certificate: %s", err)
 	}
 
-	zlintResult := zlint.LintCertificateEx(c, registry)
+	zlintResult := linter.Lint(c)
 	jsonBytes, err := json.Marshal(zlintResult.Results)
 	if err != nil {
 		log.Fatalf("unable to encode lints JSON: %s", err)
@@ -186,13 +185,13 @@ func trimmedList(raw string) []string {
 	return list
 }
 
-// setLints returns a filtered registry to use based on the nameFilter,
+// setLints returns a filtered linter to use based on the nameFilter,
 // includeNames, excludeNames, includeSources, and excludeSources flag values in
 // use.
-func setLints() (lint.Registry, error) {
-	// If there's no filter options set, use the global registry as-is
+func setLints() (lint.Linter, error) {
+	// If there's no filter options set, use the global linter as-is
 	if nameFilter == "" && includeNames == "" && excludeNames == "" && includeSources == "" && excludeSources == "" {
-		return nil, nil
+		return lint.DefaultLinter(), nil
 	}
 
 	filterOpts := lint.FilterOptions{}
@@ -220,5 +219,5 @@ func setLints() (lint.Registry, error) {
 		filterOpts.IncludeNames = trimmedList(includeNames)
 	}
 
-	return lint.GlobalRegistry().Filter(filterOpts)
+	return lint.DefaultLinter().Filter(filterOpts)
 }

@@ -22,11 +22,6 @@ import (
 	"github.com/zmap/zlint/lint"
 )
 
-var (
-	globalLintResult       *ResultSet
-	globalSingleLintResult *lint.LintResult
-)
-
 const bigCertificatePem = `-----BEGIN CERTIFICATE-----
 MIILajCCClKgAwIBAgIMOp/m5bdkZ2+oPevRMA0GCSqGSIb3DQEBCwUAMGIxCzAJ
 BgNVBAYTAkJFMRkwFwYDVQQKExBHbG9iYWxTaWduIG52LXNhMTgwNgYDVQQDEy9H
@@ -101,77 +96,54 @@ func BenchmarkZlint(b *testing.B) {
 
 	b.ResetTimer()
 	b.Run("All lints", func(b *testing.B) {
-		var lintResult *ResultSet
-		for i := 0; i < b.N; i++ {
-			lintResult = LintCertificate(x509Cert)
-		}
-
-		globalLintResult = lintResult
+		LintCertificate(x509Cert)
 	})
 
-	names := lint.GlobalRegistry().Names()
-
 	b.Run("Fast lints", func(b *testing.B) {
-		globalLintResult = &ResultSet{}
-		globalLintResult.Results = make(map[string]*lint.LintResult, len(names))
+		linter, err := lint.DefaultLinter().Filter(lint.FilterOptions{
+			ExcludeNames: []string{
+				"w_dnsname_underscore_in_trd", "e_dnsname_underscore_in_sld", "e_dnsname_hyphen_in_sld",
+				"w_dnsname_wildcard_left_of_public_suffix", "w_san_iana_pub_suffix_empty",
+			},
+		})
+		if err != nil {
+			b.Fatalf("failed to filter DefaultLinter() for fast lints: %v", err)
+		}
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			for _, key := range names {
-				switch key {
-				case "w_dnsname_underscore_in_trd", "e_dnsname_underscore_in_sld", "e_dnsname_hyphen_in_sld",
-					"w_dnsname_wildcard_left_of_public_suffix", "w_san_iana_pub_suffix_empty":
-					continue
-				}
-				value := lint.GlobalRegistry().ByName(key)
-				if !value.Lint.CheckApplies(x509Cert) {
-					continue
-				}
-				globalLintResult.Results[key] = value.Lint.Execute(x509Cert)
-			}
+			linter.Lint(x509Cert)
 		}
 	})
 
 	b.Run("Fastest lints", func(b *testing.B) {
-		globalLintResult = &ResultSet{}
-		globalLintResult.Results = make(map[string]*lint.LintResult, len(names))
+		linter, err := lint.DefaultLinter().Filter(lint.FilterOptions{
+			ExcludeNames: []string{
+				"w_dnsname_underscore_in_trd", "e_dnsname_underscore_in_sld", "e_dnsname_hyphen_in_sld",
+				"w_dnsname_wildcard_left_of_public_suffix", "w_san_iana_pub_suffix_empty",
+				"w_rsa_mod_factors_smaller_than_752", "e_dnsname_bad_character_in_label", "w_subject_dn_leading_whitespace",
+				"w_subject_dn_trailing_whitespace", "w_multiple_subject_rdn", "e_ext_san_dns_not_ia5_string",
+				"e_ext_san_empty_name", "e_dnsname_not_valid_tld", "e_dnsname_contains_bare_iana_suffix",
+				"e_dnsname_wildcard_only_in_left_label", "e_international_dns_name_not_nfc", "e_dnsname_left_label_wildcard_correct",
+				"e_international_dns_name_not_unicode", "w_issuer_dn_trailing_whitespace", "w_issuer_dn_leading_whitespace",
+				"w_multiple_issuer_rdn", "e_dnsname_empty_label", "e_dnsname_label_too_long", "e_distribution_point_incomplete",
+				"e_wrong_time_format_pre2050", "e_utc_time_does_not_include_seconds", "e_sub_cert_not_is_ca", "w_rsa_mod_not_odd",
+				"e_path_len_constraint_zero_or_less", "e_san_dns_name_includes_null_char",
+			},
+		})
+		if err != nil {
+			b.Fatalf("failed to filter DefaultLinter() for fast lints: %v", err)
+		}
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			for _, key := range names {
-				switch key {
-				case "w_dnsname_underscore_in_trd", "e_dnsname_underscore_in_sld", "e_dnsname_hyphen_in_sld",
-					"w_dnsname_wildcard_left_of_public_suffix", "w_san_iana_pub_suffix_empty",
-					"w_rsa_mod_factors_smaller_than_752", "e_dnsname_bad_character_in_label", "w_subject_dn_leading_whitespace",
-					"w_subject_dn_trailing_whitespace", "w_multiple_subject_rdn", "e_ext_san_dns_not_ia5_string",
-					"e_ext_san_empty_name", "e_dnsname_not_valid_tld", "e_dnsname_contains_bare_iana_suffix",
-					"e_dnsname_wildcard_only_in_left_label", "e_international_dns_name_not_nfc", "e_dnsname_left_label_wildcard_correct",
-					"e_international_dns_name_not_unicode", "w_issuer_dn_trailing_whitespace", "w_issuer_dn_leading_whitespace",
-					"w_multiple_issuer_rdn", "e_dnsname_empty_label", "e_dnsname_label_too_long", "e_distribution_point_incomplete",
-					"e_wrong_time_format_pre2050", "e_utc_time_does_not_include_seconds", "e_sub_cert_not_is_ca", "w_rsa_mod_not_odd",
-					"e_path_len_constraint_zero_or_less", "e_san_dns_name_includes_null_char":
-					continue
-				}
-				value := lint.GlobalRegistry().ByName(key)
-				if !value.Lint.CheckApplies(x509Cert) {
-					continue
-				}
-				globalLintResult.Results[key] = value.Lint.Execute(x509Cert)
-			}
+			linter.Lint(x509Cert)
 		}
 	})
 
-	for _, key := range names {
-		b.Run(key, func(b *testing.B) {
-			value := lint.GlobalRegistry().ByName(key)
-			if !value.Lint.CheckApplies(x509Cert) {
-				b.Skip("Check doesn't apply")
-			}
-
-			var result *lint.LintResult
-			for i := 0; i < b.N; i++ {
-				result = value.Lint.Execute(x509Cert)
-			}
-
-			globalSingleLintResult = result
+	for _, lintName := range lint.DefaultLinter().Names() {
+		b.Run(lintName, func(b *testing.B) {
+			lint.DefaultLinter().LintByName(lintName, x509Cert)
 		})
 	}
 }

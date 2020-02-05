@@ -17,8 +17,6 @@
 package zlint
 
 import (
-	"time"
-
 	"github.com/zmap/zcrypto/x509"
 	"github.com/zmap/zlint/lint"
 	_ "github.com/zmap/zlint/lints/apple"
@@ -30,33 +28,10 @@ import (
 	_ "github.com/zmap/zlint/lints/rfc"
 )
 
-const Version int64 = 3
-
-// LintCertificate runs all registered lints on c using default options,
-// producing a ResultSet.
+// LintCertificate runs all registered lints on c, producing a ResultSet.
 //
-// Using LintCertificate(c) is equivalent to calling LintCertificateEx(c, nil).
-func LintCertificate(c *x509.Certificate) *ResultSet {
-	// Run all lints from the global registry
-	return LintCertificateEx(c, nil)
-}
-
-// LintCertificateEx runs lints from the provided registry on c producing
-// a ResultSet. Providing an explicit registry allows the caller to filter the
-// lints that will be run. (See lint.Registry.Filter())
-//
-// If registry is nil then the global registry of all lints is used and this
-// function is equivalent to calling LintCertificate(c).
-func LintCertificateEx(c *x509.Certificate, registry lint.Registry) *ResultSet {
-	if c == nil {
-		return nil
-	}
-	if registry == nil {
-		registry = lint.GlobalRegistry()
-	}
-	res := new(ResultSet)
-	res.execute(c, registry)
-	res.Version = Version
-	res.Timestamp = time.Now().Unix()
-	return res
+// Using LintCertificate(c) is convenience equivalent to calling
+// lint.DefaultLinter().Lint(c)
+func LintCertificate(c *x509.Certificate) *lint.ResultSet {
+	return lint.DefaultLinter().Lint(c)
 }

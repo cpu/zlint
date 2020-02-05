@@ -23,6 +23,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/zmap/zcrypto/x509"
 )
 
 // FilterOptions is a struct used by Registry.Filter to create a sub registry
@@ -61,37 +64,29 @@ func (opts FilterOptions) Empty() bool {
 		len(opts.ExcludeSources) == 0
 }
 
-// Registry is an interface describing a collection of registered lints.
-// A Registry instance can be given to zlint.LintCertificateEx() to control what
-// lints are run for a given certificate.
-//
-// Typically users will interact with the global Registry returned by
-// GlobalRegistry(), or a filtered Registry created by applying FilterOptions to
-// the GlobalRegistry()'s Filter function.
-type Registry interface {
+// TODO(@cpu): Rewrite
+type Linter interface {
 	// Names returns a list of all of the lint names that have been registered
-	// in string sorted order.
+	// with the linter in string sorted order.
 	Names() []string
 	// Sources returns a SourceList of registered LintSources. The list is not
 	// sorted but can be sorted by the caller with sort.Sort() if required.
 	Sources() SourceList
-	// ByName returns a pointer to the registered lint with the given name, or nil
-	// if there is no such lint registered in the registry.
-	ByName(name string) *Lint
-	// BySource returns a list of registered lints that have the same LintSource as
-	// provided (or nil if there were no such lints in the registry).
-	BySource(s LintSource) []*Lint
-	// Filter returns a new Registry containing only lints that match the
-	// FilterOptions criteria.
-	Filter(opts FilterOptions) (Registry, error)
+	// Filter returns a new Linter containing only the registered lints that match
+	// the FilterOptions criteria.
+	Filter(opts FilterOptions) (Linter, error)
 	// WriteJSON writes a description of each registered lint as
 	// a JSON object, one object per line, to the provided writer.
 	WriteJSON(w io.Writer)
+	// TODO(@cpu): Doc Lint func in Linter interface
+	Lint(c *x509.Certificate) *ResultSet
+	// TODO(@cpu): Doc LintByName func in Linter interface
+	LintByName(lintName string, c *x509.Certificate) *ResultSet
 }
 
-// registryImpl implements the Registry interface to provide a global collection
-// of Lints that have been registered.
-type registryImpl struct {
+// linterImpl implements the Linter interface to provide a collection
+// of Lints that can be used to lint a certificate.
+type linterImpl struct {
 	sync.RWMutex
 	// lintsByName is a map of all registered lints by name.
 	lintsByName map[string]*Lint
@@ -127,7 +122,7 @@ func (e errDuplicateName) Error() string {
 		e.lintName)
 }
 
-// errBadInit is returned from registry.Register if the provided lint's
+// errBadInit is returned from linterImpl.Register if the provided lint's
 // Initialize function returned an error.
 type errBadInit struct {
 	lintName string
@@ -140,12 +135,12 @@ func (e errBadInit) Error() string {
 		e.lintName, e.err)
 }
 
-// register adds the provided lint to the Registry. If initialize is true then
+// register adds the provided lint to the Linter. If initialize is true then
 // the lint's Initialize() function will be called before registering the lint.
 //
 // An error is returned if the lint or lint's Lint pointer is nil, if the Lint
 // has an empty Name or if the Name was previously registered.
-func (r *registryImpl) register(l *Lint, initialize bool) error {
+func (linter *linterImpl) register(l *Lint, initialize bool) error {
 	if l == nil {
 		return errNilLint
 	}
@@ -155,7 +150,7 @@ func (r *registryImpl) register(l *Lint, initialize bool) error {
 	if l.Name == "" {
 		return errEmptyName
 	}
-	if existing := r.ByName(l.Name); existing != nil {
+	if existing := linter.byName(l.Name); existing != nil {
 		return &errDuplicateName{l.Name}
 	}
 	if initialize {
@@ -163,46 +158,38 @@ func (r *registryImpl) register(l *Lint, initialize bool) error {
 			return &errBadInit{l.Name, err}
 		}
 	}
-	r.Lock()
-	defer r.Unlock()
-	r.lintNames = append(r.lintNames, l.Name)
-	r.lintsByName[l.Name] = l
-	r.lintsBySource[l.Source] = append(r.lintsBySource[l.Source], l)
-	sort.Strings(r.lintNames)
+	linter.Lock()
+	defer linter.Unlock()
+	linter.lintNames = append(linter.lintNames, l.Name)
+	linter.lintsByName[l.Name] = l
+	linter.lintsBySource[l.Source] = append(linter.lintsBySource[l.Source], l)
+	sort.Strings(linter.lintNames)
 	return nil
 }
 
-// ByName returns the Lint previously registered under the given name with
+// byName returns the Lint previously registered under the given name with
 // Register, or nil if no matching lint name has been registered.
-func (r *registryImpl) ByName(name string) *Lint {
-	r.RLock()
-	defer r.RUnlock()
-	return r.lintsByName[name]
+func (l *linterImpl) byName(name string) *Lint {
+	l.RLock()
+	defer l.RUnlock()
+	return l.lintsByName[name]
 }
 
 // Names returns a list of all of the lint names that have been registered
 // in string sorted order.
-func (r *registryImpl) Names() []string {
-	r.RLock()
-	defer r.RUnlock()
-	return r.lintNames
-}
-
-// BySource returns a list of registered lints that have the same LintSource as
-// provided (or nil if there were no such lints).
-func (r *registryImpl) BySource(s LintSource) []*Lint {
-	r.RLock()
-	defer r.RUnlock()
-	return r.lintsBySource[s]
+func (l *linterImpl) Names() []string {
+	l.RLock()
+	defer l.RUnlock()
+	return l.lintNames
 }
 
 // Sources returns a SourceList of registered LintSources. The list is not
 // sorted but can be sorted by the caller with sort.Sort() if required.
-func (r *registryImpl) Sources() SourceList {
-	r.RLock()
-	defer r.RUnlock()
+func (l *linterImpl) Sources() SourceList {
+	l.RLock()
+	defer l.RUnlock()
 	var results SourceList
-	for k := range r.lintsBySource {
+	for k := range l.lintsBySource {
 		results = append(results, k)
 	}
 	return results
@@ -211,7 +198,7 @@ func (r *registryImpl) Sources() SourceList {
 // lintNamesToMap converts a list of lit names into a bool hashmap useful for
 // filtering. If any of the lint names are not known by the registry an error is
 // returned.
-func (r *registryImpl) lintNamesToMap(names []string) (map[string]bool, error) {
+func (l *linterImpl) lintNamesToMap(names []string) (map[string]bool, error) {
 	if len(names) == 0 {
 		return nil, nil
 	}
@@ -219,7 +206,7 @@ func (r *registryImpl) lintNamesToMap(names []string) (map[string]bool, error) {
 	namesMap := make(map[string]bool, len(names))
 	for _, n := range names {
 		n = strings.TrimSpace(n)
-		if l := r.ByName(n); l == nil {
+		if l.byName(n) == nil {
 			return nil, fmt.Errorf("unknown lint name %q", n)
 		}
 		namesMap[n] = true
@@ -238,27 +225,27 @@ func sourceListToMap(sources SourceList) map[LintSource]bool {
 	return sourceMap
 }
 
-// Filter creates a new Registry with only the lints that meet the FilterOptions
+// Filter creates a new Linter with only the lints that meet the FilterOptions
 // criteria included.
 //
 // FilterOptions are applied in the following order of precedence:
 //   ExcludeSources > IncludeSources > NameFilter > ExcludeNames > IncludeNames
-func (r *registryImpl) Filter(opts FilterOptions) (Registry, error) {
+func (l *linterImpl) Filter(opts FilterOptions) (Linter, error) {
 	// If there's no filtering to be done, return the existing Registry.
 	if opts.Empty() {
-		return r, nil
+		return l, nil
 	}
 
-	filteredRegistry := newRegistry()
+	filteredLinter := newLinter()
 
 	sourceExcludes := sourceListToMap(opts.ExcludeSources)
 	sourceIncludes := sourceListToMap(opts.IncludeSources)
 
-	nameExcludes, err := r.lintNamesToMap(opts.ExcludeNames)
+	nameExcludes, err := l.lintNamesToMap(opts.ExcludeNames)
 	if err != nil {
 		return nil, err
 	}
-	nameIncludes, err := r.lintNamesToMap(opts.IncludeNames)
+	nameIncludes, err := l.lintNamesToMap(opts.IncludeNames)
 	if err != nil {
 		return nil, err
 	}
@@ -269,13 +256,13 @@ func (r *registryImpl) Filter(opts FilterOptions) (Registry, error) {
 				"FilterOptions.ExcludeNames or FilterOptions.IncludeNames")
 	}
 
-	for _, name := range r.Names() {
-		l := r.ByName(name)
+	for _, name := range l.Names() {
+		lint := l.byName(name)
 
-		if sourceExcludes != nil && sourceExcludes[l.Source] {
+		if sourceExcludes != nil && sourceExcludes[lint.Source] {
 			continue
 		}
-		if sourceIncludes != nil && !sourceIncludes[l.Source] {
+		if sourceIncludes != nil && !sourceIncludes[lint.Source] {
 			continue
 		}
 		if opts.NameFilter != nil && !opts.NameFilter.MatchString(name) {
@@ -288,37 +275,60 @@ func (r *registryImpl) Filter(opts FilterOptions) (Registry, error) {
 			continue
 		}
 
-		// when adding lints to a filtered registry we do not want Initialize() to
+		// when adding lints to a filtered linter we do not want Initialize() to
 		// be called a second time, so provide false as the initialize argument.
-		if err := filteredRegistry.register(l, false); err != nil {
+		if err := filteredLinter.register(lint, false); err != nil {
 			return nil, err
 		}
 	}
 
-	return filteredRegistry, nil
+	return filteredLinter, nil
 }
 
 // WriteJSON writes a description of each registered lint as
 // a JSON object, one object per line, to the provided writer.
-func (r *registryImpl) WriteJSON(w io.Writer) {
+func (l *linterImpl) WriteJSON(w io.Writer) {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
-	for _, name := range r.Names() {
-		_ = enc.Encode(r.ByName(name))
+	for _, name := range l.Names() {
+		_ = enc.Encode(l.byName(name))
 	}
 }
 
-// newRegistry constructs a registryImpl that can be used to register lints.
-func newRegistry() *registryImpl {
-	return &registryImpl{
+// TODO(@cpu): Comment this
+func (l *linterImpl) Lint(cert *x509.Certificate) *ResultSet {
+	rs := newResultSet()
+
+	for _, name := range l.Names() {
+		rs.AddResult(name, l.byName(name).Execute(cert))
+	}
+
+	rs.LintEndTimestamp = time.Now().Unix()
+	return rs
+}
+
+// TODO(@cpu): Comment this
+func (l *linterImpl) LintByName(lintName string, cert *x509.Certificate) *ResultSet {
+	rs := newResultSet()
+
+	if lint := l.byName(lintName); lint != nil {
+		rs.AddResult(lintName, lint.Execute(cert))
+	}
+
+	rs.LintEndTimestamp = time.Now().Unix()
+	return rs
+}
+
+// newLinter constructs a linterImpl that can be used to register lints and lint
+// certificates.
+func newLinter() *linterImpl {
+	return &linterImpl{
 		lintsByName:   make(map[string]*Lint),
 		lintsBySource: make(map[LintSource][]*Lint),
 	}
 }
 
-// globalRegistry is the Registry used by all loaded lints that call
-// RegisterLint().
-var globalRegistry *registryImpl = newRegistry()
+var defaultLinter *linterImpl = newLinter()
 
 // RegisterLint must be called once for each lint to be executed. Normally,
 // RegisterLint is called from the Go init() function of a lint implementation.
@@ -334,17 +344,17 @@ func RegisterLint(l *Lint) {
 	// RegisterLint always sets initialize to true. It's assumed this is called by
 	// the package init() functions and therefore must be doing the first
 	// initialization of a lint.
-	if err := globalRegistry.register(l, true); err != nil {
+	if err := defaultLinter.register(l, true); err != nil {
 		panic(fmt.Sprintf("RegisterLint error: %v\n", err.Error()))
 	}
 }
 
-// GlobalRegistry is the Registry used by RegisterLint and contains all of the
-// lints that are loaded.
+// DefaultLinter is the Linter used by RegisterLint and contains all of the
+// lints that ZLint provides.
 //
 // If you want to run only a subset of the globally registered lints use
-// GloablRegistry().Filter with FilterOptions to create a filtered
-// Registry.
-func GlobalRegistry() Registry {
-	return globalRegistry
+// DefaultLinter().Filter with FilterOptions to create a filtered
+// Linter.
+func DefaultLinter() Linter {
+	return defaultLinter
 }

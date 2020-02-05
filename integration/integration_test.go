@@ -57,8 +57,8 @@ var (
 	// to be linted and lints to be run.
 	fpFilter, lintFilter *regexp.Regexp
 
-	// registry is the lint registry used. It may be filtered based on command line flags.
-	registry = lint.GlobalRegistry()
+	// linter is the lint.Linter used. It may be filtered based on command line flags.
+	linter = lint.DefaultLinter()
 )
 
 // TestMain loads the integration test config, validates it, and prepares the
@@ -109,11 +109,11 @@ func TestMain(m *testing.M) {
 
 	// If there were filter options configured apply them and update the registry
 	if !filterOpts.Empty() {
-		r, err := registry.Filter(filterOpts)
+		l, err := linter.Filter(filterOpts)
 		if err != nil {
 			log.Fatalf("failed to filter lint registry: %v\n", err)
 		}
-		registry = r
+		linter = l
 	}
 
 	// Prepare cache, downloading data files if required (or if forced by user

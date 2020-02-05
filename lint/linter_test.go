@@ -25,8 +25,8 @@ import (
 )
 
 func TestAllLintsHaveNameDescriptionSource(t *testing.T) {
-	for _, name := range GlobalRegistry().Names() {
-		lint := GlobalRegistry().ByName(name)
+	for _, name := range defaultLinter.Names() {
+		lint := defaultLinter.byName(name)
 		if lint.Name == "" {
 			t.Errorf("lint %s has empty name", name)
 		}
@@ -40,8 +40,8 @@ func TestAllLintsHaveNameDescriptionSource(t *testing.T) {
 }
 
 func TestAllLintsHaveSource(t *testing.T) {
-	for _, name := range globalRegistry.Names() {
-		lint := GlobalRegistry().ByName(name)
+	for _, name := range defaultLinter.Names() {
+		lint := defaultLinter.byName(name)
 		if lint.Source == UnknownLintSource {
 			t.Errorf("lint %s has unknown source", name)
 		}
@@ -81,8 +81,8 @@ func TestRegister(t *testing.T) {
 		Lint:   &mockLint{},
 		Source: ZLint,
 	}
-	dupeReg := newRegistry()
-	_ = dupeReg.register(egLint, true)
+	dupeLinter := newLinter()
+	_ = dupeLinter.register(egLint, true)
 
 	badInitErr := errors.New("mock init error")
 	badInitLint := &Lint{
@@ -95,7 +95,7 @@ func TestRegister(t *testing.T) {
 		name          string
 		lint          *Lint
 		init          bool
-		registry      *registryImpl
+		linter        *linterImpl
 		expectErr     error
 		expectNames   []string
 		expectSources SourceList
@@ -120,7 +120,7 @@ func TestRegister(t *testing.T) {
 		{
 			name:      "duplicate name",
 			lint:      egLint,
-			registry:  dupeReg,
+			linter:    dupeLinter,
 			expectErr: &errDuplicateName{egLint.Name},
 		},
 		{
@@ -143,30 +143,30 @@ func TestRegister(t *testing.T) {
 				Lint:   &mockLint{},
 				Source: MozillaRootStorePolicy,
 			},
-			registry:      dupeReg,
+			linter:        dupeLinter,
 			expectNames:   []string{"goodLint", egLint.Name},
 			expectSources: SourceList{MozillaRootStorePolicy, egLint.Source},
 		},
 	}
 
 	for _, tc := range testCases {
-		var reg *registryImpl
-		if tc.registry == nil {
-			reg = newRegistry()
+		var linter *linterImpl
+		if tc.linter == nil {
+			linter = newLinter()
 		} else {
-			reg = tc.registry
+			linter = tc.linter
 		}
 
-		err := reg.register(tc.lint, tc.init)
+		err := linter.register(tc.lint, tc.init)
 		if err == nil && tc.expectErr != nil {
 			t.Errorf("expected err %v, got nil", tc.expectErr)
 		} else if err != nil && err.Error() != tc.expectErr.Error() {
 			t.Errorf("expected err %v got %v", tc.expectErr, err)
 		} else if err == nil {
-			if !reflect.DeepEqual(reg.Names(), tc.expectNames) {
-				t.Errorf("expected names %v, got %v", tc.expectNames, reg.Names())
+			if !reflect.DeepEqual(linter.Names(), tc.expectNames) {
+				t.Errorf("expected names %v, got %v", tc.expectNames, linter.Names())
 			}
-			sources := reg.Sources()
+			sources := linter.Sources()
 			sort.Sort(sources)
 			if !reflect.DeepEqual(sources, tc.expectSources) {
 				t.Errorf("expected sources %v, got %v", tc.expectSources, sources)
@@ -175,7 +175,7 @@ func TestRegister(t *testing.T) {
 	}
 }
 
-func TestRegistryFilter(t *testing.T) {
+func TestLinterFilter(t *testing.T) {
 	testLint := func(name string, source LintSource) *Lint {
 		return &Lint{
 			Name:   name,
@@ -183,26 +183,26 @@ func TestRegistryFilter(t *testing.T) {
 			Lint:   &mockLint{},
 		}
 	}
-	mustRegister := func(r *registryImpl, l *Lint) {
-		if err := r.register(l, true); err != nil {
+	mustRegister := func(linter *linterImpl, l *Lint) {
+		if err := linter.register(l, true); err != nil {
 			t.Fatalf("failed to register %v", err)
 		}
 	}
 
-	// Create a registry and add some test lints
-	registry := newRegistry()
+	// Create a linter and add some test lints
+	linter := newLinter()
 
-	mustRegister(registry, testLint("e_mp_example1", MozillaRootStorePolicy))
-	mustRegister(registry, testLint("w_mp_example2", MozillaRootStorePolicy))
-	mustRegister(registry, testLint("n_mp_example3", MozillaRootStorePolicy))
-	mustRegister(registry, testLint("e_z_example1", ZLint))
-	mustRegister(registry, testLint("e_rfc_example1", RFC5280))
-	mustRegister(registry, testLint("w_rfc_example2", RFC5280))
+	mustRegister(linter, testLint("e_mp_example1", MozillaRootStorePolicy))
+	mustRegister(linter, testLint("w_mp_example2", MozillaRootStorePolicy))
+	mustRegister(linter, testLint("n_mp_example3", MozillaRootStorePolicy))
+	mustRegister(linter, testLint("e_z_example1", ZLint))
+	mustRegister(linter, testLint("e_rfc_example1", RFC5280))
+	mustRegister(linter, testLint("w_rfc_example2", RFC5280))
 
 	onlyWarnRegex := regexp.MustCompile(`^w\_.*`)
 
 	// Up front, test that invalid FilterOptions provokes an err
-	_, err := registry.Filter(FilterOptions{
+	_, err := linter.Filter(FilterOptions{
 		NameFilter:   onlyWarnRegex,
 		IncludeNames: []string{"e_mp_example_1"},
 	})
@@ -370,7 +370,7 @@ func TestRegistryFilter(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := registry.Filter(tc.opts)
+			result, err := linter.Filter(tc.opts)
 			if err != nil {
 				t.Fatalf("Filter returned err for %v", tc.opts)
 			}

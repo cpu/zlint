@@ -44,22 +44,23 @@ func TestLint(lintName string, testCertFilename string) *lint.LintResult {
 // Important: TestLintCert is only appropriate for unit tests. It will panic if
 // the lintName is not known or if the lint result is nil.
 func TestLintCert(lintName string, cert *x509.Certificate) *lint.LintResult {
-	l := lint.GlobalRegistry().ByName(lintName)
-	if l == nil {
-		panic(fmt.Sprintf(
-			"Lint name %q does not exist in lint.Lints. "+
-				"Did you forget to RegisterLint?\n",
-			lintName))
-	}
-
-	res := l.Execute(cert)
+	res := lint.DefaultLinter().LintByName(lintName, cert)
 	// We never expect a lint to return a nil LintResult
 	if res == nil {
 		panic(fmt.Sprintf(
 			"Running lint %q on test certificate generated a nil LintResult.\n",
 			lintName))
 	}
-	return res
+	// If there was no Results entry for the lint, then it wasn't a known
+	// registered lint. In a testing context this is not expected and indicates
+	// a missed registration or an incorrect TestLintCert lintName arg.
+	if res.Results[lintName] == nil {
+		panic(fmt.Sprintf(
+			"Running lint %q on test certificate generated a LintResult "+
+				"missing result for the lint.\n Did you forget to RegisterLint()?\n",
+			lintName))
+	}
+	return res.Results[lintName]
 }
 
 // ReadTestCert loads a x509.Certificate from the given inPath which is assumed

@@ -10,7 +10,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/zmap/zlint"
 	"github.com/zmap/zlint/lint"
 )
 
@@ -24,7 +23,7 @@ func lintCertificate(work workItem) certResult {
 		Fingerprint: work.Fingerprint,
 		LintSummary: make(map[string]lint.LintStatus),
 	}
-	resultSet := zlint.LintCertificateEx(work.Certificate, registry)
+	resultSet := linter.Lint(work.Certificate)
 	for lintName, r := range resultSet.Results {
 		cr.LintSummary[lintName] = r.Status
 		cr.Result.Inc(r.Status)
