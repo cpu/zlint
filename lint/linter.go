@@ -28,7 +28,31 @@ import (
 	"github.com/zmap/zcrypto/x509"
 )
 
-// FilterOptions is a struct used by Registry.Filter to create a sub registry
+// Linter is an interface describing a set of registered Lints that can be used
+// to Lint a certificate.
+type Linter interface {
+	// Names returns a list of all of the lint names that have been registered
+	// with the Linter in string sorted order.
+	Names() []string
+	// Sources returns a SourceList of registered LintSources. The list is not
+	// sorted but can be sorted by the caller with sort.Sort() if required.
+	Sources() SourceList
+	// Filter returns a new Linter containing only the registered lints that match
+	// the FilterOptions criteria.
+	Filter(opts FilterOptions) (Linter, error)
+	// WriteJSON writes a description of each registered lint as
+	// a JSON object, one object per line, to the provided writer.
+	WriteJSON(w io.Writer)
+	// Lint lints the provided certificate with all of the registered lints,
+	// producing a ResultSet.
+	Lint(c *x509.Certificate) *ResultSet
+	// LintByName lints the provided certificate with only the lint name specified,
+	// producing a ResultSet. If the lintName is unknown an empty ResultSet is
+	// returned.
+	LintByName(lintName string, c *x509.Certificate) *ResultSet
+}
+
+// FilterOptions is a struct used by Linter.Filter to create a sub registry
 // containing only lints that meet the filter options specified.
 //
 // Source based exclusion/inclusion is evaluated before Lint name based
@@ -62,26 +86,6 @@ func (opts FilterOptions) Empty() bool {
 		len(opts.ExcludeNames) == 0 &&
 		len(opts.IncludeSources) == 0 &&
 		len(opts.ExcludeSources) == 0
-}
-
-// TODO(@cpu): Rewrite
-type Linter interface {
-	// Names returns a list of all of the lint names that have been registered
-	// with the linter in string sorted order.
-	Names() []string
-	// Sources returns a SourceList of registered LintSources. The list is not
-	// sorted but can be sorted by the caller with sort.Sort() if required.
-	Sources() SourceList
-	// Filter returns a new Linter containing only the registered lints that match
-	// the FilterOptions criteria.
-	Filter(opts FilterOptions) (Linter, error)
-	// WriteJSON writes a description of each registered lint as
-	// a JSON object, one object per line, to the provided writer.
-	WriteJSON(w io.Writer)
-	// TODO(@cpu): Doc Lint func in Linter interface
-	Lint(c *x509.Certificate) *ResultSet
-	// TODO(@cpu): Doc LintByName func in Linter interface
-	LintByName(lintName string, c *x509.Certificate) *ResultSet
 }
 
 // linterImpl implements the Linter interface to provide a collection
@@ -295,7 +299,8 @@ func (l *linterImpl) WriteJSON(w io.Writer) {
 	}
 }
 
-// TODO(@cpu): Comment this
+// Lint lints the provided certificate with all of the registered lints,
+// producing a ResultSet.
 func (l *linterImpl) Lint(cert *x509.Certificate) *ResultSet {
 	rs := newResultSet()
 
@@ -307,7 +312,9 @@ func (l *linterImpl) Lint(cert *x509.Certificate) *ResultSet {
 	return rs
 }
 
-// TODO(@cpu): Comment this
+// LintByName lints the provided certificate with only the lint name specified,
+// producing a ResultSet. If the lintName is unknown an empty ResultSet is
+// returned.
 func (l *linterImpl) LintByName(lintName string, cert *x509.Certificate) *ResultSet {
 	rs := newResultSet()
 
@@ -328,10 +335,14 @@ func newLinter() *linterImpl {
 	}
 }
 
+// defaultLinter is the linterImpl used by RegisterLint when called by lint
+// initializers. It is expected to contain the full set of lints included in
+// ZLint.
 var defaultLinter *linterImpl = newLinter()
 
-// RegisterLint must be called once for each lint to be executed. Normally,
-// RegisterLint is called from the Go init() function of a lint implementation.
+// RegisterLint must be called from every lint implementation to make it known
+// to ZLint. Normally, RegisterLint is called from the Go init() function of
+// a lint implementation.
 //
 // RegsterLint will call l.Lint's Initialize() function as part of the
 // registration process.

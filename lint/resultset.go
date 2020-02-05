@@ -18,10 +18,10 @@ import (
 	"time"
 )
 
-const resultSetVersion int64 = 3
+const resultSetVersion int64 = 4
 
-// ResultSet contains the output of running all lints in a registry against
-// a single certificate.
+// ResultSet is a collection of LintResults and associated metadata. A ResultSet
+// is generated when a Linter lints a certificate with its registered lints.
 type ResultSet struct {
 	Version            int64                  `json:"version"`
 	NoticesPresent     bool                   `json:"notices_present"`
@@ -30,9 +30,11 @@ type ResultSet struct {
 	FatalsPresent      bool                   `json:"fatals_present"`
 	Results            map[string]*LintResult `json:"lints"`
 	LintStartTimestamp int64                  `json:"timestamp"`
-	LintEndTimestamp   int64                  `json:"timestamp"`
+	LintEndTimestamp   int64                  `json:"end_timestamp"`
 }
 
+// newResultSet creates a ResultSet and populates the Version and
+// LintStartTimestamp.
 func newResultSet() *ResultSet {
 	return &ResultSet{
 		Version:            resultSetVersion,
@@ -41,18 +43,25 @@ func newResultSet() *ResultSet {
 	}
 }
 
-// TODO(@cpu): Comment ResultSet.AddResult
+// AddResult adds the provided LintResult to the ResultSet, ensuring that
+// NoticesPresent, WarningsPresent, ErrorsPresent, and FatalsPresent are updated
+// according to the LintResult.Status.
 func (rs *ResultSet) AddResult(lintName string, result *LintResult) {
+	if rs.Results == nil {
+		rs.Results = make(map[string]*LintResult)
+	}
 	rs.Results[lintName] = result
 
-	switch result.Status {
-	case Notice:
-		rs.NoticesPresent = true
-	case Warn:
-		rs.WarningsPresent = true
-	case Error:
-		rs.ErrorsPresent = true
-	case Fatal:
-		rs.FatalsPresent = true
+	if result != nil {
+		switch result.Status {
+		case Notice:
+			rs.NoticesPresent = true
+		case Warn:
+			rs.WarningsPresent = true
+		case Error:
+			rs.ErrorsPresent = true
+		case Fatal:
+			rs.FatalsPresent = true
+		}
 	}
 }

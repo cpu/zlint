@@ -21,6 +21,9 @@ import (
 )
 
 // LintStatus is an enum returned by lints inside of a LintResult.
+//
+// TODO(@cpu): This should be called just "Status" to avoid stutter in dependent
+// code that uses 'lint.LintStatus' presently.
 type LintStatus int
 
 // Known LintStatus values
@@ -59,6 +62,9 @@ var (
 
 // LintResult contains a LintStatus, and an optional human-readable description.
 // The output of a lint is a LintResult.
+//
+// TODO(@cpu): This should be called just "Result" to avoid stutter in dependent
+// code that must use "lint.LintResult" presently.
 type LintResult struct {
 	Status  LintStatus `json:"result"`
 	Details string     `json:"details,omitempty"`

@@ -22,6 +22,9 @@ import (
 
 // LintSource is a type representing a known lint source that lints cite
 // requirements from.
+//
+// TODO(@cpu): This should be called just "Source" to avoid stutter in dependent
+// code that must use "lint.LintSource" presently.
 type LintSource string
 
 const (

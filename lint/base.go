@@ -39,6 +39,10 @@ type LintInterface interface {
 
 // A Lint struct represents a single lint, e.g.
 // "e_basic_constraints_not_critical". It contains an implementation of LintInterface.
+//
+// TODO(@cpu): This should be called something like BaseLint and LintInterface
+// should be called Lint. Avoiding this refactor for now because it will be
+// a large diff to find/replace `&lint.Lint{}` across the individual lints.
 type Lint struct {
 
 	// Name is a lowercase underscore-separated string describing what a given
@@ -80,7 +84,9 @@ func (l *Lint) CheckEffective(c *x509.Certificate) bool {
 // about the other methods called. The ordering is as follows:
 //
 // CheckApplies()
+//
 // CheckEffective()
+//
 // Execute()
 func (l *Lint) Execute(cert *x509.Certificate) *LintResult {
 	if l.Source == CABFBaselineRequirements && !util.IsServerAuthCert(cert) {
