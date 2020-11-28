@@ -27,4 +27,6 @@ func TestLintNames(t *testing.T) {
 				name, allowedPrefixes)
 		}
 	}
+
+	t.Error("Unconditional failure")
 }
