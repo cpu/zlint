@@ -37,8 +37,8 @@ const Version int64 = 3
 //
 // Using LintCertificate(c) is equivalent to calling LintCertificateEx(c, nil).
 func LintCertificate(c *x509.Certificate) *ResultSet {
-	// Run all lints from the global registry
-	return LintCertificateEx(c, nil)
+// Run all lints from the global registry
+return LintCertificateEx(c, nil)
 }
 
 // LintCertificateEx runs lints from the provided registry on c producing
