@@ -22,7 +22,7 @@ jobs:
           go-version: ^1.15
 
       - name: Set current date as env variable
-        run: echo "NOW::$(date +'%Y-%m-%dT%H:%M:%S %Z')" >> $GITHUB_ENV
+        run: echo "NOW=$(date +'%Y-%m-%dT%H:%M:%S %Z')" >> $GITHUB_ENV
 
       - name: Install zlint-gtld-update
         run: go install ./cmd/zlint-gtld-update/...
@@ -37,8 +37,8 @@ jobs:
         uses: peter-evans/create-pull-request@v3
         with:
           commit-message: 
-          title: "gTLD autopull: $now"
-          body: "TLD data updates from `go generate ./...` for $date."
+          title: "gTLD autopull: ${{ env.NOW }}"
+          body: "ZLint gTLD data updates from `go generate ./...` for ${{ env.NOW }}."
           labels: tld-update
           branch: zlint-gtld-update
           delete-branch: true
