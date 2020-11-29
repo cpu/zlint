@@ -36,8 +36,8 @@ jobs:
         id: cpr
         uses: peter-evans/create-pull-request@v3
         with:
-          commit-message: 
-          title: "gTLD autopull: ${{ env.NOW }}"
+          commit-message: "util: gtld_map autopull updates for ${{ env.NOW }}"
+          title: "util: gtld_map autopull updates for ${{ env.NOW }}"
           body: "ZLint gTLD data updates from `go generate ./...` for ${{ env.NOW }}."
           labels: tld-update
           branch: zlint-gtld-update
