@@ -1,5 +1,8 @@
 name: tld-update
 on:
+  push:
+    branches:
+      - 'cpu-test-tld-update-action*'
   schedule:
     # Run every hour, at the 15 minute mark. E.g.
     # 2020-11-29 00:15:00 UTC, 2020-11-29 01:15:00 UTC, 2020-11-29 02:15:00 UTC
