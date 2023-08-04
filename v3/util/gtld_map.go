@@ -4351,7 +4351,7 @@ var tldMap = map[string]GTLDPeriod{
 	"mutual": {
 		GTLD:           "mutual",
 		DelegationDate: "2016-04-05",
-		RemovalDate:    "",
+		RemovalDate:    "2023-08-01",
 	},
 	"mutuelle": {
 		GTLD:           "mutuelle",
